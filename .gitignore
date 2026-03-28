@@ -1,0 +1,13 @@
+.venv/
+config.yaml
+daily/
+import_cmds/
+.claude/
+
+# Editable install / build artifacts
+*.egg-info/
+dist/
+build/
+__pycache__/
+*.py[cod]
+

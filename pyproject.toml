@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zotero_arxiv"
+version = "0.1.0"
+description = "Daily arXiv digest (Markdown) with optional translation and Zotero import"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "arxiv",
+  "pyzotero",
+  "pyyaml",
+  "python-dateutil",
+  "requests",
+]
+
+[tool.setuptools.packages.find]
+include = ["zotero_arxiv*"]

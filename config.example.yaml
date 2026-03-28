@@ -1,0 +1,72 @@
+output:
+  # Output directory for daily markdown reports (relative to project root)
+  dir: daily
+  # Reserved for future use (zh | en | both); not used by the current generator.
+  language: both
+  # How many papers to include (after ranking)
+  max_papers: 15
+  # Minimum papers to try to collect (may widen the date window if too few candidates)
+  min_papers: 10
+  # Local timezone name for file naming / date boundaries
+  timezone: Asia/Shanghai
+
+arxiv:
+  # Fetch window. "since_days" means include papers updated/published within last N days.
+  since_days: 1
+  # Categories to include (optional). Examples: cs.AI, cs.CL, cs.LG, stat.ML
+  categories:
+    - cs.AI
+    - cs.CL
+    - cs.LG
+    - stat.ML
+  # Keyword rules (optional). Used for scoring/ranking and highlighting.
+  # - include_any: at least one term matches title/abstract
+  # - include_all: all terms match
+  # - exclude_any: if any term matches, drop the paper
+  keywords:
+    include_any:
+      - "retrieval"
+      - "rag"
+      - "alignment"
+      - "reasoning"
+      - "agent"
+      - "multimodal"
+    include_all: []
+    exclude_any:
+      - "survey"
+      - "benchmark"
+  # Optional additional arXiv query fragment (advanced).
+  # Example: 'ti:"knowledge graph" OR abs:"knowledge graph"'
+  extra_query: ""
+
+zotero:
+  # Use Zotero Web API to create items in your library
+  type: webapi
+  # Required for webapi:
+  user_id: "YOUR_USER_ID"
+  api_key: "YOUR_API_KEY"
+  library_type: user  # user | group
+  group_id: ""        # required if library_type=group
+  # Optional: target collection (by name). If missing, items go to root.
+  collection_name: "arXiv Daily"
+  # Optional: tags to add to imported items
+  default_tags:
+    - "arxiv"
+    - "daily"
+
+selection:
+  # Where to store the generated daily list for later importing
+  dir: daily
+  # JSON file name pattern (supports {date})
+  index_filename: "index_{date}.json"
+
+translation:
+  # Translation provider for translating English titles/abstracts.
+  # If api_key is empty, translation is disabled (no translation blocks in the report).
+  provider: deepseek
+  api_key: ""
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-chat"
+  source_lang: "English"
+  # e.g. "Chinese", "German", etc.
+  target_lang: "Chinese"
