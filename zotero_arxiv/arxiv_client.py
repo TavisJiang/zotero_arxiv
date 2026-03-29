@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+import time
 
 import arxiv
 
@@ -82,75 +83,78 @@ def fetch_papers(
 
     papers: list[Paper] = []
     scanned = 0
-    for r in client.results(search):
-        scanned += 1
-        if scanned == 1:
-            _p("  Receiving results from arXiv API…")
-        elif scanned % 80 == 0:
-            _p(f"  … scanned {scanned} entries, kept {len(papers)} so far")
-        title = norm_ws(r.title)
-        summary = norm_ws(r.summary)
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            for r in client.results(search):
+                scanned += 1
+                if scanned == 1:
+                    _p("  Receiving results from arXiv API…")
+                elif scanned % 80 == 0:
+                    _p(f"  … scanned {scanned} entries, kept {len(papers)} so far")
+                title = norm_ws(r.title)
+                summary = norm_ws(r.summary)
 
-        updated = r.updated.replace(tzinfo=None) if r.updated else None
-        published = r.published.replace(tzinfo=None) if r.published else None
-        if updated and updated < since_dt.replace(tzinfo=None):
-            # Since results are sorted by updated desc, we can stop once too old.
-            break
+                updated = r.updated.replace(tzinfo=None) if r.updated else None
+                if updated and updated < since_dt.replace(tzinfo=None):
+                    break
 
-        if _excluded(title, summary, arxiv_cfg.keywords.exclude_any):
-            continue
+                if _excluded(title, summary, arxiv_cfg.keywords.exclude_any):
+                    continue
 
-        score, hits = _score(
-            title=title,
-            summary=summary,
-            kw_any=arxiv_cfg.keywords.include_any,
-            kw_all=arxiv_cfg.keywords.include_all,
-        )
+                score, hits = _score(
+                    title=title,
+                    summary=summary,
+                    kw_any=arxiv_cfg.keywords.include_any,
+                    kw_all=arxiv_cfg.keywords.include_all,
+                )
 
-        # Keep even low-score papers to satisfy min_papers (ranking will still prefer high-score).
+                authors = [a.name for a in r.authors] if r.authors else []
+                cats = list(r.categories) if r.categories else []
+                primary = r.primary_category or (cats[0] if cats else "")
 
-        authors = [a.name for a in r.authors] if r.authors else []
-        cats = list(r.categories) if r.categories else []
-        primary = r.primary_category or (cats[0] if cats else "")
+                allowed = set(arxiv_cfg.categories or [])
+                text_l = f"{title}\n{summary}".lower()
+                has_quantum_signal = (
+                    ("quantum" in text_l) or ("qubit" in text_l) or ("qec" in text_l)
+                )
 
-        # Post-filter to keep the digest focused:
-        # - Accept papers whose categories intersect configured categories
-        # - Allow `cs.LG` papers only when they clearly mention quantum in title/abstract
-        allowed = set(arxiv_cfg.categories or [])
-        text_l = f"{title}\n{summary}".lower()
-        has_quantum_signal = (
-            ("quantum" in text_l) or ("qubit" in text_l) or ("qec" in text_l)
-        )
+                if ("cs.LG" in cats or primary == "cs.LG") and not has_quantum_signal:
+                    continue
 
-        # If it's a cs.LG paper, only keep it when it clearly mentions quantum.
-        if ("cs.LG" in cats or primary == "cs.LG") and not has_quantum_signal:
-            continue
+                cat_ok = bool(allowed.intersection(set(cats))) if allowed else True
+                if not cat_ok:
+                    if not has_quantum_signal:
+                        continue
 
-        cat_ok = bool(allowed.intersection(set(cats))) if allowed else True
-        if not cat_ok:
-            # Allow cross-listed non-config categories only when quantum signal is present.
-            if not has_quantum_signal:
-                continue
+                abs_url = r.entry_id
+                pdf_url = r.pdf_url
 
-        abs_url = r.entry_id
-        pdf_url = r.pdf_url
-
-        papers.append(
-            Paper(
-                arxiv_id=r.get_short_id(),
-                title=title,
-                authors=authors,
-                summary=summary,
-                pdf_url=pdf_url,
-                abs_url=abs_url,
-                published=r.published.isoformat() if r.published else "",
-                updated=r.updated.isoformat() if r.updated else "",
-                primary_category=primary,
-                categories=cats,
-                score=score,
-                highlights=hits,
-            )
-        )
+                papers.append(
+                    Paper(
+                        arxiv_id=r.get_short_id(),
+                        title=title,
+                        authors=authors,
+                        summary=summary,
+                        pdf_url=pdf_url,
+                        abs_url=abs_url,
+                        published=r.published.isoformat() if r.published else "",
+                        updated=r.updated.isoformat() if r.updated else "",
+                        primary_category=primary,
+                        categories=cats,
+                        score=score,
+                        highlights=hits,
+                    )
+                )
+            break  # success, no retry needed
+        except Exception as e:
+            msg = str(e)
+            if "429" in msg and attempt < max_retries - 1:
+                wait = 60 * (2 ** attempt)
+                _p(f"  arXiv rate-limited (429), waiting {wait}s before retry {attempt + 1}/{max_retries - 1}…")
+                time.sleep(wait)
+            else:
+                raise
 
     if scanned > 0:
         _p(f"  Done scanning arXiv ({scanned} entries → {len(papers)} kept before ranking).")
